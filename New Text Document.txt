@@ -1,0 +1,10 @@
+[ENABLE_RTSP]
+RTSP_Enable=1
+RTSP_Port=554
+RTSP_User=admin
+RTSP_Password=1234
+
+; Often, enabling ONVIF is also required for the change to stick
+[ENABLE_ONVIF]
+ONVIF_Enable=1
+ONVIF_Port=80
