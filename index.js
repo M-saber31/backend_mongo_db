@@ -2,6 +2,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+// Add multer for file uploads
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 dotenv.config();
 
@@ -53,6 +56,27 @@ app.get('/api/submissions', async (req, res) => {
   } catch (error) {
     console.error('Error fetching submissions:', error);
     res.status(500).json({ message: 'Error fetching submissions', error: error.message });
+  }
+});
+
+// POST Endpoint to Save Submission
+app.post('/api/submissions', upload.single('image'), async (req, res) => {
+  try {
+    const newSubmission = new Submission({
+      _id: req.body.id || new mongoose.Types.ObjectId().toString(), // Generate ID if not provided
+      title: req.body.title,
+      subject: req.body.subject,
+      status: 'Pending', // Default status
+      date: new Date().toISOString().split('T')[0],
+      rating: null,
+      image: req.file ? req.file.buffer.toString('base64') : '', // Store image as base64
+      feedback: req.body.description || null,
+    });
+    await newSubmission.save();
+    res.status(201).json(newSubmission);
+  } catch (error) {
+    console.error('Error saving submission:', error);
+    res.status(500).json({ message: 'Error saving submission' });
   }
 });
 
