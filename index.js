@@ -2,29 +2,43 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-// Add multer for file uploads
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+const path = require('path');
+const fs = require('fs');
+
+// Create uploads directory if it doesn't exist
+const uploadDir = 'uploads/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Configure multer for disk storage (temporary, as Render's file system is ephemeral)
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+const upload = multer({ storage });
+
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:8081', 'http://192.168.0.145:8081'], // React Native dev server
-  credentials: true
+  origin: [
+    'http://localhost:19006', // Expo dev server
+    'http://localhost:8081', // Your current setting
+    'http://192.168.0.145:8081',
+    'https://your-app-domain.com', // Add your deployed frontend domain
+  ],
+  credentials: true,
 }));
 app.use(express.json());
-
-mongoose.connection.on('open', () => {
-  console.log('Connected to database:', mongoose.connection.db.databaseName);
-  mongoose.connection.db.listCollections().toArray((err, collections) => {
-    if (err) console.error('Error listing collections:', err);
-    else console.log('Collections:', collections.map(c => c.name));
-  });
-});
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI, {
@@ -34,15 +48,28 @@ mongoose.connect(process.env.MONGODB_URI, {
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
+mongoose.connection.on('open', () => {
+  console.log('Connected to database:', mongoose.connection.db.databaseName);
+  mongoose.connection.db.listCollections().toArray((err, collections) => {
+    if (err) console.error('Error listing collections:', err);
+    else console.log('Collections:', collections.map(c => c.name));
+  });
+});
+
 // Submission Schema
 const submissionSchema = new mongoose.Schema({
-  _id: { type: String, required: true},
+  _id: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
   title: { type: String, required: true },
   subject: { type: String, required: true },
-  status: { type: String, enum: ['Rented', 'Borrowed', 'Expired'],default: 'pending', required: true },
+  status: {
+    type: String,
+    enum: ['pending', 'Rented', 'Borrowed', 'Expired'], // Include 'pending'
+    default: 'pending',
+    required: true,
+  },
   date: { type: String, required: true },
   rating: { type: Number, default: null },
-  image: { type: String, required: true },
+  image: { type: String, required: true }, // Stores file path
   feedback: { type: String, default: null },
 });
 
@@ -62,21 +89,29 @@ app.get('/api/submissions', async (req, res) => {
 // POST Endpoint to Save Submission
 app.post('/api/submissions', upload.single('image'), async (req, res) => {
   try {
+    console.log('Received body:', req.body);
+    console.log('Received file:', req.file);
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Image is required' });
+    }
+
     const newSubmission = new Submission({
-      _id: req.body.id || new mongoose.Types.ObjectId().toString(), // Generate ID if not provided
+      _id: req.body.id || new mongoose.Types.ObjectId().toString(),
       title: req.body.title,
       subject: req.body.subject,
-      status: 'Pending', // Default status
-      date: new Date().toISOString().split('T')[0],
-      rating: null,
-      image: req.file ? req.file.buffer.toString('base64') : '', // Store image as base64
+      status: req.body.status || 'pending', // Use frontend value or default
+      date: req.body.date || new Date().toISOString().split('T')[0],
+      rating: req.body.rating || null,
+      image: req.file.path, // Store file path
       feedback: req.body.description || null,
     });
+
     await newSubmission.save();
     res.status(201).json(newSubmission);
   } catch (error) {
     console.error('Error saving submission:', error);
-    res.status(500).json({ message: 'Error saving submission' });
+    res.status(500).json({ message: 'Error saving submission', error: error.message });
   }
 });
 
