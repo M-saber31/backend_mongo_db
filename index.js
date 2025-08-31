@@ -39,7 +39,7 @@ const submissionSchema = new mongoose.Schema({
   _id: { type: String, required: true},
   title: { type: String, required: true },
   subject: { type: String, required: true },
-  status: { type: String, enum: ['Rented', 'Borrowed', 'Expired'], required: true },
+  status: { type: String, enum: ['Rented', 'Borrowed', 'Expired'],default: 'pending', required: true },
   date: { type: String, required: true },
   rating: { type: Number, default: null },
   image: { type: String, required: true },
